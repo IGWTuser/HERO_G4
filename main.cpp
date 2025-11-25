@@ -15,6 +15,8 @@
 #include "CSVWriter.hh"
 
 #include "G4ParticleTable.hh"
+#include "G4ParticleGun.hh"        
+#include "G4ParticleDefinition.hh"
 
 #include <vector>
 #include <chrono>
@@ -82,10 +84,14 @@ int main(int argc, char** argv) {
     std::vector<G4String> particles = {"proton", "e-", "neutron", "gamma"};
     std::vector<G4double> energies = {0.1*TeV, 0.5*GeV, 1.0*GeV, 5.0*GeV, 10.0*GeV};
     
-    int nEventsPerRun = 100;  // Количество событий на каждый ран
-    if (argc > 1) {
-        nEventsPerRun = std::atoi(argv[^6_1]);
+   int nEventsPerRun = 100;  // Количество событий на каждый ран
+if (argc > 1) {
+    // Проверяем, является ли первый аргумент числом
+    std::string firstArg = argv[1];
+    if (firstArg != "--reset") {
+        nEventsPerRun = std::atoi(argv[1]);  // <-- ИСПРАВЛЕНО: argv[1] вместо argv[^6_1]
     }
+}
     
     G4ParticleTable* particleTable = G4ParticleTable::GetParticleTable();
     
