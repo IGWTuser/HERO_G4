@@ -38,13 +38,13 @@ void CSVWriter::WriteHeader(const std::vector<G4double>& delayTimes) {
     
     // Записываем заголовок только если файл новый или был пустой
     if (!fFileExisted) {
-        fFile << "Run Number,Particle Name,Energy (GeV)";
+        fFile << "Event,Particle,Energy(TeV)";
         
         // Добавляем колонки для каждого времени задержки
         for (size_t i = 0; i < delayTimes.size(); ++i) {
             G4double timeInMicroseconds = delayTimes[i] / microsecond;
-            fFile << ",Neutrons <1eV at " << std::fixed << std::setprecision(3) 
-                  << timeInMicroseconds << " us";
+            fFile << ",N<1eV@" << std::fixed << std::setprecision(2) 
+                  << timeInMicroseconds << "us";
         }
         
         fFile << "\n";
@@ -55,16 +55,16 @@ void CSVWriter::WriteHeader(const std::vector<G4double>& delayTimes) {
     }
 }
 
-void CSVWriter::WriteRow(int runNumber, 
+void CSVWriter::WriteRow(int eventNumber, 
                          const G4String& particleName, 
-                         G4double energyTeV,
+                         G4double energyTeV,  // <-- Переименовали
                          const std::vector<int>& neutronCounts) {
     if (!fFile.is_open()) return;
     
-    // Записываем номер строки, название частицы и энергию
-    fFile << runNumber << "," 
+    // Записываем номер события, название частицы и энергию в TeV
+    fFile << eventNumber << "," 
           << particleName << "," 
-          << std::fixed << std::setprecision(6) << energyTeV;
+          << std::fixed << std::setprecision(3) << energyTeV;
     
     // Записываем количество нейтронов для каждой задержки
     for (const auto& count : neutronCounts) {
@@ -81,23 +81,23 @@ int CSVWriter::GetLastRunNumber(const G4String& filename) {
         return -1; // Файл не существует
     }
     
-    int lastRunNumber = -1;
+    int lastEventNumber = -1;
     std::string line;
     
     // Пропускаем заголовок
     if (std::getline(file, line)) {
-        // Читаем все строки и берём первое поле (номер рана)
+        // Читаем все строки и берём первое поле (номер события)
         while (std::getline(file, line)) {
             if (line.empty()) continue;
             
             // Находим первую запятую
             size_t commaPos = line.find(',');
             if (commaPos != std::string::npos) {
-                std::string runNumberStr = line.substr(0, commaPos);
+                std::string eventNumberStr = line.substr(0, commaPos);
                 try {
-                    int runNum = std::stoi(runNumberStr);
-                    if (runNum > lastRunNumber) {
-                        lastRunNumber = runNum;
+                    int eventNum = std::stoi(eventNumberStr);
+                    if (eventNum > lastEventNumber) {
+                        lastEventNumber = eventNum;
                     }
                 } catch (...) {
                     // Игнорируем некорректные строки
@@ -107,5 +107,5 @@ int CSVWriter::GetLastRunNumber(const G4String& filename) {
     }
     
     file.close();
-    return lastRunNumber;
+    return lastEventNumber;
 }
