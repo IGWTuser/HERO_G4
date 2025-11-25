@@ -18,7 +18,7 @@ public:
     // Запись одной строки данных
     void WriteRow(int runNumber, 
                   const G4String& particleName, 
-                  G4double energyGeV,
+                  G4double energyTeV,
                   const std::vector<int>& neutronCounts);
     
     bool IsOpen() const { return fFile.is_open(); }

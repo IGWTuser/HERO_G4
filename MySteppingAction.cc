@@ -5,7 +5,7 @@
 #include "G4SystemOfUnits.hh"
 
 MySteppingAction::MySteppingAction(const std::vector<G4double>& thresholds)
- : fThresholds(thresholds)
+: fThresholds(thresholds)
 {
     // создаём пустые карты нужного размера
     fDelayedNeutronsMaps.resize(fThresholds.size());
@@ -23,42 +23,39 @@ void MySteppingAction::UserSteppingAction(const G4Step* step) {
     G4double kinE       = step->GetPostStepPoint()->GetKineticEnergy();
     G4double globalTime = step->GetPostStepPoint()->GetGlobalTime();
 
-    // сохраняем начальную энергию
-    if (fSecondaryNeutronsMap.find(id) == fSecondaryNeutronsMap.end()) {
-        fSecondaryNeutronsMap[id] = kinE;
-    }
-
-    // проверяем каждый порог
+    // УБРАЛИ сохранение начальной энергии в fSecondaryNeutronsMap
+    // Теперь записываем только для задержек из массива
+    
+    // Проверяем каждый порог времени
     for (size_t i = 0; i < fThresholds.size(); ++i) {
-        if (globalTime >= fThresholds[i]
-            && fDelayedNeutronsMaps[i].find(id) == fDelayedNeutronsMaps[i].end())
-        {
-            fDelayedNeutronsMaps[i][id] = kinE;
+        // Если глобальное время >= порога, записываем нейтрон
+        if (globalTime >= fThresholds[i]) {
+            // Если этот нейтрон ещё не записан в эту карту
+            if (fDelayedNeutronsMaps[i].find(id) == fDelayedNeutronsMaps[i].end()) {
+                fDelayedNeutronsMaps[i][id] = kinE;
+            }
         }
-    }
-
-    // при желании можно убить трек после максимального порога
-    if (globalTime >= fThresholds.back()) {
-        track->SetTrackStatus(fStopAndKill);
     }
 }
 
 void MySteppingAction::Reset() {
-    fSecondaryNeutronsMap.clear();
-    for (auto& m : fDelayedNeutronsMaps) m.clear();
+    // Очищаем только карты задержек (начальную убрали)
+    for (auto& m : fDelayedNeutronsMaps) {
+        m.clear();
+    }
 }
 
-const std::map<G4int, G4double>&
-MySteppingAction::GetSecondaryNeutrons() const {
-    return fSecondaryNeutronsMap;
+const std::map<G4int, G4double>& MySteppingAction::GetSecondaryNeutrons() const {
+    // Эта функция больше не используется, но оставляем для совместимости
+    // Возвращаем пустую карту
+    static std::map<G4int, G4double> emptyMap;
+    return emptyMap;
 }
 
-const std::vector<std::map<G4int, G4double>>&
-MySteppingAction::GetDelayedNeutronsMaps() const {
+const std::vector<std::map<G4int, G4double>>& MySteppingAction::GetDelayedNeutronsMaps() const {
     return fDelayedNeutronsMaps;
 }
 
-const std::vector<G4double>&
-MySteppingAction::GetThresholds() const {
+const std::vector<G4double>& MySteppingAction::GetThresholds() const {
     return fThresholds;
 }

@@ -130,3 +130,55 @@ void MyEventAction::EndOfEventAction(const G4Event* event) {
 void MyEventAction::SaveSummaryData() {
     // Здесь можно объединить и сохранить сводные данные
 }
+
+// ... существующий код ...
+
+void MyEventAction::ResetRunStatistics() {
+    fTotalNeutronCounts.clear();
+    if (fSteppingAction) {
+        fTotalNeutronCounts.resize(fSteppingAction->GetThresholds().size(), 0);
+    }
+}
+
+std::vector<int> MyEventAction::CountLowEnergyNeutrons(G4double energyThreshold) const {
+    std::vector<int> counts;
+    
+    if (!fSteppingAction) {
+        return counts;
+    }
+    
+    auto const& maps = fSteppingAction->GetDelayedNeutronsMaps();
+    counts.resize(maps.size(), 0);
+    
+    // Подсчитываем нейтроны с энергией < energyThreshold для каждой задержки
+    for (size_t i = 0; i < maps.size(); ++i) {
+        for (auto const& entry : maps[i]) {
+            if (entry.second < energyThreshold) {
+                counts[i]++;
+            }
+        }
+    }
+    
+    return counts;
+}
+
+// Модифицируем EndOfEventAction для накопления статистики
+void MyEventAction::EndOfEventAction(const G4Event* event) {
+    G4int eventID = event->GetEventID();
+    const G4String baseName = BuildBaseNameFromPrimary(event);
+
+    // ... существующий код записи в текстовые файлы ...
+
+    // Добавляем накопление статистики для CSV
+    std::vector<int> eventCounts = CountLowEnergyNeutrons(1.0 * eV);
+    
+    // Инициализируем вектор, если это первое событие
+    if (fTotalNeutronCounts.empty()) {
+        fTotalNeutronCounts.resize(eventCounts.size(), 0);
+    }
+    
+    // Накапливаем счётчики
+    for (size_t i = 0; i < eventCounts.size() && i < fTotalNeutronCounts.size(); ++i) {
+        fTotalNeutronCounts[i] += eventCounts[i];
+    }
+}

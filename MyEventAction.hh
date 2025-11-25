@@ -7,19 +7,8 @@
 #include <vector>
 #include <utility>
 
-/**
- * Класс для записи данных по событиям.
- * Имена файлов формируются автоматически как:
- *   <particle>_<energyTeV>_<delay_us>.txt
- * где:
- *   energyTeV  — энергия первичной частицы в TeV с 3 знаками (например, 1.000TeV)
- *   delay_us   — задержка в микросекундах с 3 знаками (например, 0.100us, 8.000us)
- * Для начального распределения используется задержка 0.000us:
- *   <particle>_<energyTeV>_0.000us.txt
- */
 class MyEventAction : public G4UserEventAction {
 public:
-    // dataDir — относительный путь от build/ до папки CW/data
     MyEventAction(MySteppingAction* steppingAction,
                   const G4String& dataDir = "../data");
     virtual ~MyEventAction();
@@ -27,21 +16,27 @@ public:
     virtual void BeginOfEventAction(const G4Event* event) override;
     virtual void EndOfEventAction(const G4Event* event) override;
 
-    // Функция для сохранения итоговых данных по всем событиям
     void SaveSummaryData();
+    
+    // Новые методы для подсчёта нейтронов < 1 эВ
+    std::vector<int> CountLowEnergyNeutrons(G4double energyThreshold = 1.0 * eV) const;
+    void ResetRunStatistics();
+    
+    // Геттеры для статистики по всему рану
+    const std::vector<int>& GetTotalNeutronCounts() const { return fTotalNeutronCounts; }
 
 private:
-    // Формирование базового имени: <particle>_<energyTeV>
     G4String BuildBaseNameFromPrimary(const G4Event* event) const;
-
-    // Форматирование величин в имени файла
-    static G4String FormatEnergy(G4double e); // всегда TeV, 3 знака
-    static G4String FormatDelay(G4double t);  // всегда us, формат n.000us
+    static G4String FormatEnergy(G4double e);
+    static G4String FormatDelay(G4double t);
     static G4String Sanitize(const G4String& s);
 
 private:
     MySteppingAction* fSteppingAction;
     G4String          fDataDirectory;
+    
+    // Статистика для CSV (накапливается за все события рана)
+    std::vector<int> fTotalNeutronCounts;
 };
 
-#endif // MyEventAction_h
+#endif

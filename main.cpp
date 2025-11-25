@@ -11,18 +11,16 @@
 
 #include "MySteppingAction.hh"
 #include "MyEventAction.hh"
+#include "MyRunAction.hh"
+#include "CSVWriter.hh"
+
+#include "G4ParticleTable.hh"
 
 #include <vector>
 #include <chrono>
 #include <cstdlib>
 
 int main(int argc, char** argv) {
-    // Определяем, работаем ли в интерактивном режиме
-    G4UIExecutive* ui = nullptr;
-    if (argc == 1) {
-        ui = new G4UIExecutive(argc, argv);
-    }
-
     // Создаём менеджер запуска
     G4RunManager* runManager = new G4RunManager;
 
@@ -31,7 +29,7 @@ int main(int argc, char** argv) {
 
     // Инициализируем физический список
     G4PhysListFactory factory;
-    G4VModularPhysicsList* physicsList = factory.GetReferencePhysList("FTFP_BERT_HPT");
+    G4VModularPhysicsList* physicsList = factory.GetReferencePhysList("FTFP_BERT_HP");
     runManager->SetUserInitialization(physicsList);
 
     // Настраиваем отсечку по времени для нейтронов
@@ -41,12 +39,13 @@ int main(int argc, char** argv) {
     physicsList->RegisterPhysics(neutronCut);
 
     // Устанавливаем генератор первичных частиц
-    runManager->SetUserAction(new PrimaryGeneratorAction());
+    PrimaryGeneratorAction* primaryGen = new PrimaryGeneratorAction();
+    runManager->SetUserAction(primaryGen);
 
     // Задаём вектор порогов (время задержки для карт)
     std::vector<G4double> delays = { 
-        100*ns,
-        250*ns,
+        100*ns,   // 0.1 мкс
+        250*ns,   // 0.25 мкс
         750*ns,
         1*us, 
         2*us, 
@@ -61,53 +60,76 @@ int main(int argc, char** argv) {
         150*us,
         200*us
     };
+    
     MySteppingAction* steppingAction = new MySteppingAction(delays);
     runManager->SetUserAction(steppingAction);
-    runManager->SetUserAction(new MyEventAction(steppingAction, "../data"));
-
+    
+    MyEventAction* eventAction = new MyEventAction(steppingAction, "../data");
+    runManager->SetUserAction(eventAction);
+    
+    // Создаём CSV файл
+    G4String csvFilename = "../data/simulation_results.csv";
+    CSVWriter* csvWriter = new CSVWriter(csvFilename, true);  // true = append mode
+    csvWriter->WriteHeader(delays);
+    
+    MyRunAction* runAction = new MyRunAction(eventAction, csvWriter, csvFilename);
+    runManager->SetUserAction(runAction);
+    
     // Инициализируем симуляцию
     runManager->Initialize();
 
-    // Визуализация (если нужна)
-    G4VisExecutive* visManager = new G4VisExecutive;
-    visManager->Initialize();
-
-    // Запуск макросов
-    G4UImanager* UImanager = G4UImanager::GetUIpointer();
-    if (ui) {
-        UImanager->ApplyCommand("/control/macroPath /home/vibecoding/CW/");
-        UImanager->ApplyCommand("/control/execute init_vis.mac");
-        ui->SessionStart();
-        delete ui;
-    } else {
-        UImanager->ApplyCommand("/control/execute vis.mac");
-    }
-
-    // Определяем число событий для запуска (передаётся первым аргументом в batch-режиме)
-    int nEvents = 0;
+    // Определяем параметры для симуляции
+    std::vector<G4String> particles = {"proton", "e-", "neutron", "gamma"};
+    std::vector<G4double> energies = {0.1*TeV, 0.5*GeV, 1.0*GeV, 5.0*GeV, 10.0*GeV};
+    
+    int nEventsPerRun = 100;  // Количество событий на каждый ран
     if (argc > 1) {
-        // в batch режиме можно передать число событий
-        nEvents = std::atoi(argv[1]);
+        nEventsPerRun = std::atoi(argv[^6_1]);
     }
-    if (nEvents <= 0) {
-        G4cout << "No events requested. Exiting." << G4endl;
-    } else {
-        // Запускаем события по одному, чтобы отчет каждые 10
-        auto tStart = std::chrono::steady_clock::now();
-        for (int i = 0; i < nEvents; ++i) {
-            runManager->BeamOn(1);
-            if ((i+1) % 10 == 0) {
-                auto tNow = std::chrono::steady_clock::now();
-                auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(tNow - tStart).count();
-                G4cout << "Processed " << (i+1)
-                       << " events, elapsed: " << elapsed << " s" << G4endl;
-            }
+    
+    G4ParticleTable* particleTable = G4ParticleTable::GetParticleTable();
+    
+    // Цикл по частицам и энергиям
+    auto tStart = std::chrono::steady_clock::now();
+    
+    for (const auto& particleName : particles) {
+        G4ParticleDefinition* particle = particleTable->FindParticle(particleName);
+        if (!particle) {
+            G4cerr << "Particle " << particleName << " not found!" << G4endl;
+            continue;
+        }
+        
+        for (const auto& energy : energies) {
+            // Настраиваем пушку
+            G4ParticleGun* gun = primaryGen->GetParticleGun();
+            gun->SetParticleDefinition(particle);
+            gun->SetParticleEnergy(energy);
+            
+            // Устанавливаем текущие параметры для RunAction
+            runAction->SetCurrentParticle(particleName);
+            runAction->SetCurrentEnergy(energy);
+            
+            G4cout << "\n========================================" << G4endl;
+            G4cout << "Starting simulation:" << G4endl;
+            G4cout << "  Particle: " << particleName << G4endl;
+            G4cout << "  Energy: " << energy/TeV << " TeV" << G4endl;
+            G4cout << "  Events: " << nEventsPerRun << G4endl;
+            G4cout << "========================================\n" << G4endl;
+            
+            // Запускаем симуляцию
+            runManager->BeamOn(nEventsPerRun);
+            
+            auto tNow = std::chrono::steady_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(tNow - tStart).count();
+            G4cout << "Total elapsed time: " << elapsed << " s\n" << G4endl;
         }
     }
-
+    
     // Очистка ресурсов
-    delete visManager;
+    delete csvWriter;
     delete runManager;
+
+    G4cout << "\n Simulation completed! Check ../data/simulation_results.csv" << G4endl;
 
     return 0;
 }
