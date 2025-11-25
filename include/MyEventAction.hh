@@ -7,6 +7,8 @@
 #include <vector>
 #include <utility>
 
+class CSVWriter;
+
 class MyEventAction : public G4UserEventAction {
 public:
     MyEventAction(MySteppingAction* steppingAction,
@@ -18,12 +20,13 @@ public:
 
     void SaveSummaryData();
     
-    // Новые методы для подсчёта нейтронов < 1 эВ
-    std::vector<int> CountLowEnergyNeutrons(G4double energyThreshold = 1.0 * eV) const;
-    void ResetRunStatistics();
+    // Методы для CSV
+    void SetCSVWriter(CSVWriter* writer) { fCSVWriter = writer; }
+    void SetCurrentParticle(const G4String& name) { fCurrentParticleName = name; }
+    void SetCurrentEnergy(G4double energy) { fCurrentEnergy = energy; }
+    void SetGlobalEventNumber(int num) { fGlobalEventNumber = num; }
     
-    // Геттеры для статистики по всему рану
-    const std::vector<int>& GetTotalNeutronCounts() const { return fTotalNeutronCounts; }
+    std::vector<int> CountLowEnergyNeutrons(G4double energyThreshold = 1.0 * eV) const;
 
 private:
     G4String BuildBaseNameFromPrimary(const G4Event* event) const;
@@ -35,8 +38,11 @@ private:
     MySteppingAction* fSteppingAction;
     G4String          fDataDirectory;
     
-    // Статистика для CSV (накапливается за все события рана)
-    std::vector<int> fTotalNeutronCounts;
+    // Для CSV записи
+    CSVWriter*        fCSVWriter;
+    G4String          fCurrentParticleName;
+    G4double          fCurrentEnergy;
+    int               fGlobalEventNumber;
 };
 
 #endif

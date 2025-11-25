@@ -5,11 +5,9 @@
 #include "MyEventAction.hh"
 #include "globals.hh"
 
-class CSVWriter;
-
 class MyRunAction : public G4UserRunAction {
 public:
-    MyRunAction(MyEventAction* eventAction, CSVWriter* csvWriter, const G4String& csvFilename);
+    MyRunAction(MyEventAction* eventAction);
     virtual ~MyRunAction();
 
     virtual void BeginOfRunAction(const G4Run* run) override;
@@ -17,15 +15,15 @@ public:
     
     void SetCurrentParticle(const G4String& name) { fCurrentParticleName = name; }
     void SetCurrentEnergy(G4double energy) { fCurrentEnergy = energy; }
+    
+    static int GetGlobalEventNumber() { return sGlobalEventNumber; }
 
 private:
     MyEventAction* fEventAction;
-    CSVWriter*     fCSVWriter;
     G4String       fCurrentParticleName;
     G4double       fCurrentEnergy;
-    G4int          fRunNumber;
     
-    static G4int   sGlobalRunNumber;
+    static int     sGlobalEventNumber;
 };
 
 #endif

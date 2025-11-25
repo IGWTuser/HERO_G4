@@ -1,5 +1,6 @@
 #include "MyEventAction.hh"
 #include "MySteppingAction.hh"
+#include "CSVWriter.hh"
 
 #include "G4Event.hh"
 #include "G4PrimaryVertex.hh"
@@ -18,7 +19,11 @@ MyEventAction::MyEventAction(MySteppingAction* steppingAction,
                              const G4String& dataDir)
   : G4UserEventAction(),
     fSteppingAction(steppingAction),
-    fDataDirectory(dataDir)
+    fDataDirectory(dataDir),
+    fCSVWriter(nullptr),
+    fCurrentParticleName("unknown"),
+    fCurrentEnergy(0.0),
+    fGlobalEventNumber(0)
 { }
 
 MyEventAction::~MyEventAction() {
@@ -30,114 +35,38 @@ void MyEventAction::BeginOfEventAction(const G4Event*) {
     fSteppingAction->Reset();
 }
 
-// ---------- Форматирование ----------
 G4String MyEventAction::FormatEnergy(G4double e) {
-    // Энергию всегда печатаем в TeV с тремя знаками
     std::ostringstream os;
     os << std::fixed << std::setprecision(3) << (e / TeV);
     return os.str() + "TeV";
 }
 
 G4String MyEventAction::FormatDelay(G4double t) {
-    // Всегда в микросекундах с точностью до тысячных: n.000us
-    double usVal = t / us;
-    // Избавляемся от артефактов двоичной арифметики (например, 0.099999...)
-    usVal = std::round(usVal * 1000.0) / 1000.0;
-
     std::ostringstream os;
-    os << std::fixed << std::setprecision(3) << usVal;
+    os << std::fixed << std::setprecision(3) << (t / microsecond);
     return os.str() + "us";
 }
 
-G4String MyEventAction::Sanitize(const G4String& in) {
-    G4String s = in;
-    for (auto& ch : s) {
-        if (!(std::isalnum(ch) || ch=='_' || ch=='-' )) ch = '_';
-    }
-    return s;
+G4String MyEventAction::Sanitize(const G4String& s) {
+    G4String result = s;
+    std::replace(result.begin(), result.end(), '/', '_');
+    std::replace(result.begin(), result.end(), ' ', '_');
+    return result;
 }
 
 G4String MyEventAction::BuildBaseNameFromPrimary(const G4Event* event) const {
-    const G4PrimaryVertex* vtx  = event ? event->GetPrimaryVertex() : nullptr;
-    const G4PrimaryParticle* p0 = vtx ? vtx->GetPrimary() : nullptr;
+    auto vtx = event->GetPrimaryVertex(0);
+    if (!vtx) return "unknown";
+    auto prim = vtx->GetPrimary(0);
+    if (!prim) return "unknown";
 
-    G4String pname = "unknown";
-    G4double kinE  = 0.0;
+    auto def = prim->GetParticleDefinition();
+    if (!def) return "unknown";
 
-    if (p0) {
-        if (const G4ParticleDefinition* def = p0->GetG4code()) {
-            pname = def->GetParticleName();
-        }
-        kinE = p0->GetKineticEnergy();
-    }
-
-    // <particle>_<energyTeV>
-    return Sanitize(pname) + "_" + FormatEnergy(kinE);
-}
-// -----------------------------------
-
-void MyEventAction::EndOfEventAction(const G4Event* event) {
-    G4int eventID = event->GetEventID();
-    const G4String baseName = BuildBaseNameFromPrimary(event);
-
-    // 1) Начальные энергии вторичных нейтронов — задержка 0.000us
-    {
-        const G4String fname   = baseName + "_0.000us.txt";
-        const std::string path = (fDataDirectory + "/" + fname).c_str();
-
-        std::ofstream out(path.c_str(), std::ios::app);
-        if (!out.is_open()) {
-            G4cerr << "Error: cannot open " << path << " for writing!" << G4endl;
-        } else {
-            out << "Event " << eventID << "\nNeutronID\tInitialEnergy(eV)\n";
-            for (auto const& entry : fSteppingAction->GetSecondaryNeutrons()) {
-                out << entry.first << "\t"
-                    << std::fixed << std::setprecision(6)
-                    << entry.second / eV << "\n";
-            }
-            out << "----------------------------------------\n";
-        }
-    }
-
-    // 2) Энергии для каждого порога задержки — <base>_<n.000us>.txt
-    auto const& thresholds = fSteppingAction->GetThresholds();
-    auto const& maps       = fSteppingAction->GetDelayedNeutronsMaps();
-
-    for (size_t i = 0; i < thresholds.size(); ++i) {
-        const G4double t      = thresholds[i];
-        const G4String dStr   = FormatDelay(t);
-        const G4String fname  = baseName + "_" + dStr + ".txt";
-        const std::string path = (fDataDirectory + "/" + fname).c_str();
-
-        std::ofstream out(path.c_str(), std::ios::app);
-        if (!out.is_open()) {
-            G4cerr << "Error: cannot open " << path << " for writing!" << G4endl;
-            continue;
-        }
-
-        out << "Event " << eventID
-            << "\nNeutronID\tEnergy(eV) at " << dStr << "\n";
-
-        for (auto const& entry : maps[i]) {
-            out << entry.first << "\t"
-                << std::fixed << std::setprecision(6)
-                << entry.second / eV << "\n";
-        }
-        out << "----------------------------------------\n";
-    }
-}
-
-void MyEventAction::SaveSummaryData() {
-    // Здесь можно объединить и сохранить сводные данные
-}
-
-// ... существующий код ...
-
-void MyEventAction::ResetRunStatistics() {
-    fTotalNeutronCounts.clear();
-    if (fSteppingAction) {
-        fTotalNeutronCounts.resize(fSteppingAction->GetThresholds().size(), 0);
-    }
+    G4String pName = Sanitize(def->GetParticleName());
+    G4double pE    = prim->GetKineticEnergy();
+    G4String eStr  = FormatEnergy(pE);
+    return pName + "_" + eStr;
 }
 
 std::vector<int> MyEventAction::CountLowEnergyNeutrons(G4double energyThreshold) const {
@@ -162,23 +91,42 @@ std::vector<int> MyEventAction::CountLowEnergyNeutrons(G4double energyThreshold)
     return counts;
 }
 
-// Модифицируем EndOfEventAction для накопления статистики
 void MyEventAction::EndOfEventAction(const G4Event* event) {
     G4int eventID = event->GetEventID();
     const G4String baseName = BuildBaseNameFromPrimary(event);
 
-    // ... существующий код записи в текстовые файлы ...
+    // Записываем в текстовые файлы (если нужно)
+    auto const& maps       = fSteppingAction->GetDelayedNeutronsMaps();
+    auto const& thresholds = fSteppingAction->GetThresholds();
 
-    // Добавляем накопление статистики для CSV
-    std::vector<int> eventCounts = CountLowEnergyNeutrons(1.0 * eV);
-    
-    // Инициализируем вектор, если это первое событие
-    if (fTotalNeutronCounts.empty()) {
-        fTotalNeutronCounts.resize(eventCounts.size(), 0);
+    for (size_t i = 0; i < thresholds.size(); ++i) {
+        G4String delayStr = FormatDelay(thresholds[i]);
+        G4String fname = fDataDirectory + "/" + baseName + "_" + delayStr + ".txt";
+
+        std::ofstream out(fname, std::ios::app);
+        if (out.is_open()) {
+            for (auto const& entry : maps[i]) {
+                out << eventID << " " << entry.second / MeV << "\n";
+            }
+            out.close();
+        }
     }
-    
-    // Накапливаем счётчики
-    for (size_t i = 0; i < eventCounts.size() && i < fTotalNeutronCounts.size(); ++i) {
-        fTotalNeutronCounts[i] += eventCounts[i];
+
+    // Записываем в CSV после каждого события
+    if (fCSVWriter && fCSVWriter->IsOpen()) {
+        std::vector<int> neutronCounts = CountLowEnergyNeutrons(1.0 * eV);
+        
+        fCSVWriter->WriteRow(
+            fGlobalEventNumber,
+            fCurrentParticleName,
+            fCurrentEnergy / TeV,
+            neutronCounts
+        );
+        
+        fGlobalEventNumber++;
     }
+}
+
+void MyEventAction::SaveSummaryData() {
+    // Ваш существующий код для summary (если нужно)
 }

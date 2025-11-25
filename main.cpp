@@ -15,12 +15,13 @@
 #include "CSVWriter.hh"
 
 #include "G4ParticleTable.hh"
-#include "G4ParticleGun.hh"        
+#include "G4ParticleGun.hh"
 #include "G4ParticleDefinition.hh"
 
 #include <vector>
 #include <chrono>
 #include <cstdlib>
+#include <string>
 
 int main(int argc, char** argv) {
     // Создаём менеджер запуска
@@ -69,29 +70,46 @@ int main(int argc, char** argv) {
     MyEventAction* eventAction = new MyEventAction(steppingAction, "../data");
     runManager->SetUserAction(eventAction);
     
+    MyRunAction* runAction = new MyRunAction(eventAction);
+    runManager->SetUserAction(runAction);
+
+    // Проверяем режим (append или reset)
+    bool appendMode = true;
+    int nEventsPerRun = 100;
+    
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--reset") {
+            appendMode = false;
+            G4cout << "Reset mode: Starting fresh CSV file" << G4endl;
+        } else {
+            nEventsPerRun = std::atoi(argv[i]);
+        }
+    }
+    
     // Создаём CSV файл
     G4String csvFilename = "../data/simulation_results.csv";
-    CSVWriter* csvWriter = new CSVWriter(csvFilename, true);  // true = append mode
+    CSVWriter* csvWriter = new CSVWriter(csvFilename, appendMode);
     csvWriter->WriteHeader(delays);
     
-    MyRunAction* runAction = new MyRunAction(eventAction, csvWriter, csvFilename);
-    runManager->SetUserAction(runAction);
+    // Передаём CSV writer в EventAction
+    eventAction->SetCSVWriter(csvWriter);
     
+    // Инициализируем глобальный номер события из файла
+    if (appendMode) {
+        int lastEventNumber = CSVWriter::GetLastRunNumber(csvFilename);
+        if (lastEventNumber >= 0) {
+            eventAction->SetGlobalEventNumber(lastEventNumber + 1);
+            G4cout << "Continuing from event number: " << (lastEventNumber + 1) << G4endl;
+        }
+    }
+
     // Инициализируем симуляцию
     runManager->Initialize();
 
     // Определяем параметры для симуляции
     std::vector<G4String> particles = {"proton", "e-", "neutron", "gamma"};
-    std::vector<G4double> energies = {0.1*TeV, 0.5*GeV, 1.0*GeV, 5.0*GeV, 10.0*GeV};
-    
-   int nEventsPerRun = 100;  // Количество событий на каждый ран
-if (argc > 1) {
-    // Проверяем, является ли первый аргумент числом
-    std::string firstArg = argv[1];
-    if (firstArg != "--reset") {
-        nEventsPerRun = std::atoi(argv[1]);  // <-- ИСПРАВЛЕНО: argv[1] вместо argv[^6_1]
-    }
-}
+    std::vector<G4double> energies = {0.1*TeV, 0.5*TeV, 1.0*TeV, 5.0*TeV, 10.0*TeV};
     
     G4ParticleTable* particleTable = G4ParticleTable::GetParticleTable();
     
@@ -135,7 +153,7 @@ if (argc > 1) {
     delete csvWriter;
     delete runManager;
 
-    G4cout << "\n Simulation completed! Check ../data/simulation_results.csv" << G4endl;
+    G4cout << "\nSimulation completed! Check ../data/simulation_results.csv" << G4endl;
 
     return 0;
 }

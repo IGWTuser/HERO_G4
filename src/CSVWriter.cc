@@ -57,7 +57,7 @@ void CSVWriter::WriteHeader(const std::vector<G4double>& delayTimes) {
 
 void CSVWriter::WriteRow(int eventNumber, 
                          const G4String& particleName, 
-                         G4double energyTeV,  // <-- Переименовали
+                         G4double energyTeV,
                          const std::vector<int>& neutronCounts) {
     if (!fFile.is_open()) return;
     

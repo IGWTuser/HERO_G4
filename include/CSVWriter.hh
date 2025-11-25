@@ -16,14 +16,14 @@ public:
     void WriteHeader(const std::vector<G4double>& delayTimes);
     
     // Запись одной строки данных
-    void WriteRow(int runNumber, 
+    void WriteRow(int eventNumber, 
                   const G4String& particleName, 
                   G4double energyTeV,
                   const std::vector<int>& neutronCounts);
     
     bool IsOpen() const { return fFile.is_open(); }
     
-    // Получить последний номер рана из файла
+    // Получить последний номер события из файла
     static int GetLastRunNumber(const G4String& filename);
     
 private:

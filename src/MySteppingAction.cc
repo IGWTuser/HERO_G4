@@ -23,8 +23,7 @@ void MySteppingAction::UserSteppingAction(const G4Step* step) {
     G4double kinE       = step->GetPostStepPoint()->GetKineticEnergy();
     G4double globalTime = step->GetPostStepPoint()->GetGlobalTime();
 
-    // УБРАЛИ сохранение начальной энергии в fSecondaryNeutronsMap
-    // Теперь записываем только для задержек из массива
+    // НЕ сохраняем начальную энергию (убрали запись в fSecondaryNeutronsMap)
     
     // Проверяем каждый порог времени
     for (size_t i = 0; i < fThresholds.size(); ++i) {
@@ -39,15 +38,14 @@ void MySteppingAction::UserSteppingAction(const G4Step* step) {
 }
 
 void MySteppingAction::Reset() {
-    // Очищаем только карты задержек (начальную убрали)
+    // Очищаем только карты задержек
     for (auto& m : fDelayedNeutronsMaps) {
         m.clear();
     }
 }
 
 const std::map<G4int, G4double>& MySteppingAction::GetSecondaryNeutrons() const {
-    // Эта функция больше не используется, но оставляем для совместимости
-    // Возвращаем пустую карту
+    // Эта функция больше не используется, возвращаем пустую карту
     static std::map<G4int, G4double> emptyMap;
     return emptyMap;
 }
