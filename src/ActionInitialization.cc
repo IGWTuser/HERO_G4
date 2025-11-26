@@ -3,6 +3,8 @@
 #include "MySteppingAction.hh"
 #include "MyEventAction.hh"
 #include "CSVWriter.hh"
+#include "G4ParticleGun.hh"
+#include "G4ParticleTable.hh"
 
 ActionInitialization::ActionInitialization(const std::vector<G4double>& delays,
                                            CSVWriter* csvWriter,
@@ -22,23 +24,32 @@ ActionInitialization::~ActionInitialization()
 
 void ActionInitialization::BuildForMaster() const
 {
-    // В master-потоке ничего не делаем, он только управляет workers
+    // Master не создаёт Actions
 }
 
 void ActionInitialization::Build() const
 {
-    // Каждый worker создаёт свои собственные Action-объекты
+    // Каждый worker создаёт свои Action-объекты
     
-    // Генератор первичных частиц
-    SetUserAction(new PrimaryGeneratorAction());
+    PrimaryGeneratorAction* primaryGen = new PrimaryGeneratorAction();
     
-    // SteppingAction отслеживает нейтроны на каждом шаге
+    G4ParticleGun* gun = primaryGen->GetParticleGun();
+    G4ParticleTable* particleTable = G4ParticleTable::GetParticleTable();
+    G4ParticleDefinition* particle = particleTable->FindParticle(fParticleName);
+    
+    // Устанавливаем частицу и энергию для worker-потока
+    gun->SetParticleDefinition(particle);
+    gun->SetParticleEnergy(fEnergy);
+    
+    SetUserAction(primaryGen);
+    
+    // Отслеживание нейтронов
     MySteppingAction* steppingAction = new MySteppingAction(fDelays);
     SetUserAction(steppingAction);
     
-    // EventAction собирает статистику по событию и пишет в CSV
+    // Обработка событий и запись в CSV
     MyEventAction* eventAction = new MyEventAction(steppingAction, "../data");
-    eventAction->SetCSVWriter(fCSVWriter);       // передаём общий CSV writer
+    eventAction->SetCSVWriter(fCSVWriter);
     eventAction->SetCurrentParticle(fParticleName);
     eventAction->SetCurrentEnergy(fEnergy);
     SetUserAction(eventAction);
