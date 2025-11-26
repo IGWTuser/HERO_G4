@@ -7,7 +7,7 @@
 MySteppingAction::MySteppingAction(const std::vector<G4double>& thresholds)
 : fThresholds(thresholds)
 {
-    // создаём пустые карты нужного размера
+    // Создаём пустые карты для каждого временного порога
     fDelayedNeutronsMaps.resize(fThresholds.size());
 }
 
@@ -15,7 +15,11 @@ MySteppingAction::~MySteppingAction() { }
 
 void MySteppingAction::UserSteppingAction(const G4Step* step) {
     G4Track* track = step->GetTrack();
+    
+    // Интересуют только нейтроны (PDG код 2112)
     if (track->GetDefinition()->GetPDGEncoding() != 2112) return;
+    
+    // Только те, что находятся в детекторе
     auto volume = step->GetPostStepPoint()->GetPhysicalVolume();
     if (!volume || volume->GetName() != "Detector") return;
 
@@ -23,13 +27,13 @@ void MySteppingAction::UserSteppingAction(const G4Step* step) {
     G4double kinE       = step->GetPostStepPoint()->GetKineticEnergy();
     G4double globalTime = step->GetPostStepPoint()->GetGlobalTime();
 
-    // НЕ сохраняем начальную энергию (убрали запись в fSecondaryNeutronsMap)
+    // Начальное распределение больше не записываем (было убрано для упрощения)
     
-    // Проверяем каждый порог времени
+    // Проверяем каждый временной порог
     for (size_t i = 0; i < fThresholds.size(); ++i) {
-        // Если глобальное время >= порога, записываем нейтрон
+        // Если время >= порога, записываем нейтрон в соответствующую карту
         if (globalTime >= fThresholds[i]) {
-            // Если этот нейтрон ещё не записан в эту карту
+            // Записываем только если этот нейтрон ещё не был записан
             if (fDelayedNeutronsMaps[i].find(id) == fDelayedNeutronsMaps[i].end()) {
                 fDelayedNeutronsMaps[i][id] = kinE;
             }
@@ -38,14 +42,14 @@ void MySteppingAction::UserSteppingAction(const G4Step* step) {
 }
 
 void MySteppingAction::Reset() {
-    // Очищаем только карты задержек
+    // Очищаем все карты перед новым событием
     for (auto& m : fDelayedNeutronsMaps) {
         m.clear();
     }
 }
 
 const std::map<G4int, G4double>& MySteppingAction::GetSecondaryNeutrons() const {
-    // Эта функция больше не используется, возвращаем пустую карту
+    // Возвращаем пустую карту (начальное распределение больше не используется)
     static std::map<G4int, G4double> emptyMap;
     return emptyMap;
 }

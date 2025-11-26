@@ -6,16 +6,17 @@
 #include <fstream>
 #include <vector>
 #include <string>
+#include <mutex>
 
 class CSVWriter {
 public:
     CSVWriter(const G4String& filename, bool append = true);
     ~CSVWriter();
     
-    // Запись заголовка CSV (только если файл новый или пустой)
+    // Записывает заголовок таблицы
     void WriteHeader(const std::vector<G4double>& delayTimes);
     
-    // Запись одной строки данных
+    // Записывает одну строку данных
     void WriteRow(int eventNumber, 
                   const G4String& particleName, 
                   G4double energyTeV,
@@ -23,13 +24,19 @@ public:
     
     bool IsOpen() const { return fFile.is_open(); }
     
-    // Получить последний номер события из файла
+    // Находит последний номер события в файле (для режима append)
     static int GetLastRunNumber(const G4String& filename);
     
+    // Возвращает следующий свободный номер события (thread-safe)
+    int GetNextEventNumber();
+
 private:
     std::ofstream fFile;
     G4String fFilename;
-    bool fFileExisted;
+    bool fFileExisted;           // был ли файл до открытия
+    
+    mutable std::mutex fMutex;   // для безопасной работы из разных потоков
+    int fCurrentEventNumber;     // счётчик событий
 };
 
 #endif

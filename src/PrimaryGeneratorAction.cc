@@ -9,18 +9,20 @@
 #include "Randomize.hh"
 
 PrimaryGeneratorAction::PrimaryGeneratorAction() : G4VUserPrimaryGeneratorAction() {
-    // Создаем пушку для генерации одной частицы за событие
-    fParticleGun = new G4ParticleGun(1); // теперь только 1 частица за событие!
+    // Создаём пушку, генерирующую 1 частицу за событие
+    fParticleGun = new G4ParticleGun(1);
 
-    // Получаем определение протона из таблицы частиц
+    // По умолчанию стреляем протонами
     G4ParticleDefinition* particle = G4ParticleTable::GetParticleTable()->FindParticle("proton");
     fParticleGun->SetParticleDefinition(particle);
     
-    // Задаем начальную позицию и направление частиц
+    // Позиция пушки: 2 метра перед детектором по оси Z
     fParticleGun->SetParticlePosition(G4ThreeVector(0, 0, -2*m));
+    
+    // Направление: вдоль оси Z (прямо на детектор)
     fParticleGun->SetParticleMomentumDirection(G4ThreeVector(0, 0, 1));
     
-    // Начальная энергия, можно задать случайным образом позже
+    // Начальная энергия (будет изменяться в main)
     fParticleGun->SetParticleEnergy(100*GeV);
 }
 
@@ -29,10 +31,6 @@ PrimaryGeneratorAction::~PrimaryGeneratorAction() {
 }
 
 void PrimaryGeneratorAction::GeneratePrimaries(G4Event* event) {
-    // Здесь можно задать случайную энергию или другие параметры:
-    // Например, раскомментируй эту строку для случайной энергии в диапазоне от 1 до 100 MeV:
-    // fParticleGun->SetParticleEnergy(1*MeV + G4UniformRand()*(100*MeV - 1*MeV));
-    
-    // Генерируем вершину события
+    // Генерируем одну частицу с текущими настройками пушки
     fParticleGun->GeneratePrimaryVertex(event);
 }
